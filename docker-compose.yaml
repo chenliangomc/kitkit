@@ -1,0 +1,10 @@
+#;-2019-0824-1310.33edt
+# smaau -- smart monitoring and alert unit
+
+version: "2"
+
+services:
+  small:
+    build: ./smaau
+    ports:
+      - "7767:7767"
