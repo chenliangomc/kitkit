@@ -1,0 +1,127 @@
+#!/usr/bin/env groovy
+
+/*
+string( name: 'GIT_URL', defaultValue: 'https://github.com/chenliangomc/kitkit.git', description: 'repository URL' )
+
+string( name: 'IMG_CLI', defaultValue: 'docker', description: 'command-line tool for image operation' )
+string( name: 'IMG_UID', defaultValue: '1000', description: 'UID for processes' )
+string( name: 'IMG_NAME', defaultValue: 'shinken', description: 'name of the image' )
+string( name: 'IMG_DEFAULT_TAG', defaultValue: 'staging', description: 'tag of the image' )
+string( name: 'IMG_PUSH_DELAY', defaultValue: '11', description: 'safety interval' )
+string( name: 'IMG_REPO_HOST', defaultValue: 'docker-registry.example.com', description: 'image registry hostname' )
+string( name: 'IMG_REPO_NAMESPACE', defaultValue: 'sample-public-image', description: 'image repository namespace' )
+
+string( name: 'CLOUD_CLI', defaultValue: 'oc', description: 'command-line tool for cloud operation' )
+string( name: 'CLOUD_API_HOST', defaultValue: 'console.cloud.example.com', description: 'cloud API server hostname' )
+string( name: 'CLOUD_USER_AUTH', defaultValue: 'some_user_secret_in_jenkins', description: 'cloud user account credentials, eg. "user:pass"; check page /jenkins/credentials/' )
+string( name: 'CLOUD_NAMESPACE', defaultValue: 'sample-app', description: 'namespace of the cloud application' )
+string( name: 'CLOUD_APP_DEPLOYCONF', defaultValue: 'smart-monitor', description: 'config name of the cloud application' )
+*/
+
+def tag_from_commit=''
+
+pipeline {
+    environment {
+        DOCKER_CONFIG="${env.JENKINS_HOME}/.docker"
+    }
+    parameters {
+        string( name: 'WORK_BRANCH', defaultValue: '*/master', description: 'name of the branch' )
+
+        booleanParam( name: 'dryRun', defaultValue: false,  description: 'dry run (build image only, no re-deployment)' )
+
+        booleanParam( name: 'tagImageAsLatest', defaultValue: true,  description: 'tag the image as latest' )
+    }
+
+    agent any
+
+    stages {
+        stage('getCode') {
+            steps{
+                echo 'checkout code from repository'
+                checkout(
+                    changelog: false,
+                    poll: false,
+                    scm: [
+                        $class: 'GitSCM',
+                        branches: [[ name: "${params.WORK_BRANCH}"]],
+                        doGenerateSubmoduleConfigurations: false,
+                        extensions: [],
+                        submoduleCfg: [],
+                        userRemoteConfigs:
+                            [[
+                                url: "${params.GIT_URL}",
+                            ]]
+                    ]
+                )
+                script {
+                    def git_commit_sha = sh (
+                        returnStdout: true,
+                        script: "git rev-parse HEAD"
+                    ).trim()
+                    echo "rev: ${git_commit_sha}"
+                    env.tag_from_commit = git_commit_sha
+                }
+            }
+        }
+        stage('buildImage') {
+            environment {
+                CU_AUTH = credentials("${params.CLOUD_USER_AUTH}")
+            }
+            steps {
+                parallel(
+                    "getRegistryAuth": {
+                        script {
+                            sh "${params.CLOUD_CLI} login https://${params.CLOUD_API_HOST} -u ${CU_AUTH_USR} -p ${CU_AUTH_PSW}"
+                            def TTT = sh(
+                                returnStdout: true,
+                                script: "${params.CLOUD_CLI} whoami -t"
+                            ).trim()
+                            sh "${params.IMG_CLI} login -u ${CU_AUTH_USR} -p \"${TTT}\" ${params.IMG_REPO_HOST}"
+                        }
+                    },
+                    "buildApp": {
+                        dir(path: './smaau') {
+                            script {
+                                sleep params.IMG_PUSH_DELAY.toInteger()
+                                //---*---//
+                                def the_img = docker.build(
+                                    "${params.IMG_REPO_HOST}/${params.IMG_REPO_NAMESPACE}/${params.IMG_NAME}:${params.IMG_DEFAULT_TAG}",
+                                    "--build-arg IMG_UID=${params.IMG_UID} ."
+                                )
+                                if ( params.tagImageAsLatest ){
+                                    the_img.push('latest')
+                                } else {
+                                    the_img.push()
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+        }
+        stage('deployApp') {
+            steps {
+                script {
+                    if ( params.dryRun ) {
+                        echo 'no re-deploy will be done'
+                    } else {
+                        sh "${params.CLOUD_CLI} --namespace=${params.CLOUD_NAMESPACE} rollout latest dc/${params.CLOUD_APP_DEPLOYCONF}"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script{
+                cleanWs()
+            }
+        }
+        success {
+            echo 'Congratulations.'
+        }
+        failure {
+            echo 'We have got a problem.'
+        }
+    }
+}
