@@ -19,13 +19,6 @@
 
 set -e
 
-#-daemon-config;
-NM_PIPE=/var/spool/nullmailer/trigger
-if [ ! -p $NM_PIPE ]; then
-    rm -f $NM_PIPE && mkfifo $NM_PIPE
-fi
-chmod 0622 $NM_PIPE
-
 
 HOME=${MU_HOME:-"/home/master"}
 export HOME
@@ -43,12 +36,14 @@ echo "[ii] currently installed mod:"; shinken inventory
 
 #-app-config;
 sed -i "s/modules/modules webui2\n#/g" /etc/shinken/brokers/broker-master.cfg
-sed -i "s/-S localhost//g" /etc/shinken/commands/notify-host-by-email.cfg
-sed -i "s/-S localhost//g" /etc/shinken/commands/notify-service-by-email.cfg
 rm -f /etc/shinken/receivers/*
 
 if [ -d /opt/etc ]; then
     rsync -rlq /opt/etc/ ${HOME}/etc/ || true
+fi
+
+if [ -f ${HOME}/etc/mailrelay.sh ]; then
+    bash ${HOME}/etc/mailrelay.sh
 fi
 
 if [ -f ${HOME}/etc/webui2.cfg ]; then

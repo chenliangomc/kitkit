@@ -11,6 +11,9 @@ default password: admin
 
 put your customized config files under `/opt/etc`
 
+For email notification, a separate SMTP relay is needed.
+add your shell commands that update Shinken config files to `/opt/etc/mailrelay.sh`
+
 ## Continuous Delivery
 
 A sample Jenkins Pipeline file is provided.

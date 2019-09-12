@@ -49,15 +49,13 @@ if [ -f $BACKPORT_CONF ]; then
     bash $BACKPORT_CONF
 fi
 
-DEBIAN_FRONTEND=noninteractive apt-get install -q -y nullmailer bsd-mailx rsyslog
-
 DEBIAN_FRONTEND=noninteractive apt-get install -q -y \
     apt-transport-https gnupg debian-archive-keyring \
-    psmisc uuid-runtime openssh-client jq \
+    psmisc uuid-runtime openssh-client \
     stunnel4 logrotate supervisor
 
 DEBIAN_FRONTEND=noninteractive apt-get install -q -y \
-    python-dev python-pip python-pycurl virtualenv
+    python-dev python-pip python-pycurl
 
 DEBIAN_FRONTEND=noninteractive apt-get install -q -y monitoring-plugins
 DEBIAN_FRONTEND=noninteractive apt-get clean
@@ -78,8 +76,6 @@ chown -R $IMG_UID:$IMG_UID $MU_HOME
 
 chmod 775 $MU_HOME $MU_HOME/etc $MU_HOME/temp
 chmod a+x $MU_HOME/etc/*sh
-
-chown -R $IMG_UID /var/spool/nullmailer /etc/nullmailer
 
 #--final-clean-up--#
 _sp=$(realpath $0)
