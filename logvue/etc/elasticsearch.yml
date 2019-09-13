@@ -1,0 +1,9 @@
+bootstrap.memory_lock: false
+#xpack.security.enabled: false
+
+cluster.name: graylog
+
+http.host: 0.0.0.0
+http.port: 9200
+network.host: 127.0.0.1
+transport.host: localhost

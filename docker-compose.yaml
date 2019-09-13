@@ -8,3 +8,8 @@ services:
     build: ./smaau
     ports:
       - "7767:7767"
+
+  logview:
+    build: ./logvue
+    ports:
+      - "9000:9000"
