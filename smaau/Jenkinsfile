@@ -18,7 +18,7 @@ string( name: 'CLOUD_NAMESPACE', defaultValue: 'sample-app', description: 'names
 string( name: 'CLOUD_APP_DEPLOYCONF', defaultValue: 'smart-monitor', description: 'config name of the cloud application' )
 */
 
-def tag_from_commit=''
+def img_full_name = ''
 
 pipeline {
     environment {
@@ -27,7 +27,7 @@ pipeline {
     parameters {
         string( name: 'WORK_BRANCH', defaultValue: '*/master', description: 'name of the branch' )
 
-        booleanParam( name: 'dryRun', defaultValue: false,  description: 'dry run (build image only, no re-deployment)' )
+        booleanParam( name: 'dryRun', defaultValue: false,  description: 'dry run (push image only, no re-deployment)' )
 
         booleanParam( name: 'tagImageAsLatest', defaultValue: true,  description: 'tag the image as latest' )
     }
@@ -59,11 +59,27 @@ pipeline {
                         script: "git rev-parse HEAD"
                     ).trim()
                     echo "rev: ${git_commit_sha}"
-                    env.tag_from_commit = git_commit_sha
                 }
             }
         }
         stage('buildImage') {
+            steps {
+                dir(path: './smaau') {
+                    script {
+                        def img_tag = "${params.IMG_DEFAULT_TAG}"
+                        if ( params.tagImageAsLatest ){
+                            img_tag = 'latest'
+                        }
+                        def the_img = docker.build(
+                            "${params.IMG_REPO_HOST}/${params.IMG_REPO_NAMESPACE}/${params.IMG_NAME}:${img_tag}",
+                            "--build-arg IMG_UID=${params.IMG_UID} ."
+                        )
+                        env.img_full_name = the_img.imageName()
+                    }
+                }
+            }
+        }
+        stage('pushImage') {
             environment {
                 CU_AUTH = credentials("${params.CLOUD_USER_AUTH}")
             }
@@ -79,20 +95,12 @@ pipeline {
                             sh "${params.IMG_CLI} login -u ${CU_AUTH_USR} -p \"${TTT}\" ${params.IMG_REPO_HOST}"
                         }
                     },
-                    "buildApp": {
+                    "pushApp": {
                         dir(path: './smaau') {
                             script {
                                 sleep params.IMG_PUSH_DELAY.toInteger()
-                                //---*---//
-                                def the_img = docker.build(
-                                    "${params.IMG_REPO_HOST}/${params.IMG_REPO_NAMESPACE}/${params.IMG_NAME}:${params.IMG_DEFAULT_TAG}",
-                                    "--build-arg IMG_UID=${params.IMG_UID} ."
-                                )
-                                if ( params.tagImageAsLatest ){
-                                    the_img.push('latest')
-                                } else {
-                                    the_img.push()
-                                }
+                                //---delay---//
+                                sh "docker push ${env.img_full_name}"
                             }
                         }
                     }
@@ -113,9 +121,7 @@ pipeline {
     }
     post {
         always {
-            script{
-                cleanWs()
-            }
+            cleanWs()
         }
         success {
             echo 'Congratulations.'

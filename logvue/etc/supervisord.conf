@@ -1,4 +1,4 @@
-#  Copyright 2018, 2019 Liang Chen <liangchenomc@gmail.com>
+#  Copyright 2018, 2019, 2020 Liang Chen <liangchenomc@gmail.com>
 #
 #  This file is part of kitkit.
 #
